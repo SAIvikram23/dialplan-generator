@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dialplan Generator - Corefactors Telephony</title>
+<meta name="description" content="Offline Asterisk dialplan generator for contacts, DIALGROUP and Round Robin / Sticky Queue onboarding, with a CLI & CDR command generator.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f766e'/%3E%3Cpath d='M18 20h28M18 32h20M18 44h14' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* ---------------------------------------------------------------- */
+  /* New in index1.html: left module navigation + command module only.  */
+  /* All colours are taken from the existing styles.css CSS variables. */
+  /* ---------------------------------------------------------------- */
+  .app-workspace { display: flex; min-height: calc(100vh - 68px); }
+
+  .module-sidebar {
+    width: 240px;
+    flex: 0 0 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 20px 14px;
+    background: var(--ink);
+    color: #e2e8f0;
+    border-right: 1px solid #1e293b;
+  }
+  .module-sidebar-title {
+    margin: 4px 10px 8px;
+    color: var(--muted-light);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+  .module-nav-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 13px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .module-nav-btn:hover { background: #1e293b; color: #ffffff; }
+  .module-nav-btn:focus-visible { outline: 2px solid #5eead4; outline-offset: 2px; }
+  .module-nav-btn.active {
+    border-color: rgba(94, 234, 212, .35);
+    background: var(--brand);
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(15, 118, 110, .28);
+  }
+  .module-nav-num {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, .14);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .module-sidebar-foot {
+    margin-top: auto;
+    padding: 12px 10px 2px;
+    border-top: 1px solid #1e293b;
+    color: var(--muted-light);
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+  .module-main { flex: 1; min-width: 0; }
+  .module-panel { display: none; }
+  .module-panel.active { display: block; }
+  .ast-derived-card { border-left-color: var(--brand); }
+  .ast-derived-card .summary-list dd code { white-space: nowrap; }
+  .ast-output-section { margin-top: 26px; }
+  .ast-output-section .code-card pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    white-space: pre;
+    overflow: auto;
+  }
+
+  @media (max-width: 860px) {
+    .app-workspace { flex-direction: column; }
+    .module-sidebar {
+      width: 100%;
+      flex: 0 0 auto;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      overflow-x: auto;
+    }
+    .module-sidebar-title,
+    .module-sidebar-foot { display: none; }
+    .module-nav-btn { width: auto; white-space: nowrap; }
+  }
+</style>
+</head>
+
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">DP</div>
+    <div>
+      <h1>Asterisk Dialplan Generator</h1>
+      <p>Corefactors &middot; BLR telephony onboarding</p>
+    </div>
+  </div>
+  <div class="header-actions">
+    <a class="btn ghost small v1-link" href="v1-live-generator.html" title="Open the untouched v1 classic generator">
+      Open v1 Classic Generator -&gt;
+    </a>
+    <span class="live-pill"><span class="dot"></span> 100% static &middot; offline ready</span>
+  </div>
+</header>
+
+<div class="app-workspace">
+  <!-- Left-hand module navigation -->
+  <aside class="module-sidebar" aria-label="Module navigation">
+    <div class="module-sidebar-title">Modules</div>
+    <button type="button" id="nav-dialplan" class="module-nav-btn active" aria-controls="panel-dialplan" aria-current="page" onclick="switchAppModule('dialplan')">
+      <span class="module-nav-num">1.</span>
+      <span>Dialplan Generator</span>
+    </button>
+    <button type="button" id="nav-asterisk" class="module-nav-btn" aria-controls="panel-asterisk" onclick="switchAppModule('asterisk')">
+      <span class="module-nav-num">2.</span>
+      <span>Asterisk Cmds</span>
+    </button>
+    <div class="module-sidebar-foot">Offline toolkit<br>Runs from <code>file://</code></div>
+  </aside>
+
+  <div class="module-main">
+
+    <!-- MODULE 1: DIALPLAN GENERATOR (unchanged from index.html) -->
+    <div id="panel-dialplan" class="module-panel active">
+      <main class="shell">
+
+        <section class="page-head">
+          <div>
+            <span class="eyebrow">CRM routing rule &middot; no server required</span>
+            <h2>Edit routing rule</h2>
+            <p>
+              Configure the inbound context, call-connect window and forwarding action.
+              Contacts and Groups keep the classic flow; Round Robin / Sticky Queue adds
+              the production queue, ODBC sticky lookup, IVR options and CLI commands.
+            </p>
+          </div>
+          <div class="head-actions">
+            <button type="button" class="btn ghost" id="resetBtn">Reset defaults</button>
+          </div>
+        </section>
+
+        <div class="layout">
+          <form class="form-col" id="ruleForm" novalidate>
+
+            <!-- 01 ------------------------------------------------------------ -->
+            <section class="card card-blue">
+              <div class="card-head">
+                <span class="step">01</span>
+                <div>
+                  <h3>Server &amp; Trunk</h3>
+                  <p>Select the telephony node, customer context, DID and display caller ID.</p>
+                </div>
+              </div>
+
+              <div class="grid two">
+                <div class="field">
+                  <div class="label-row">
+                    <label for="preset">Server / Trunk Preset <span class="req">*</span></label>
+                    <button type="button" class="help" data-tip="Selects the BLR trunk. Airtel omits the P-Preferred-Identity header; TATA adds the exact production header in both contexts." aria-label="More information about the server preset">?</button>
+                  </div>
+                  <select id="preset" name="preset">
+                    <option value="airtel">Bangalore &ndash; Airtel IMS</option>
+                    <option value="tata">Bangalore &ndash; TATA</option>
+                  </select>
+                  <span class="hint" id="presetNote">Airtel IMS trunk with no P-Preferred-Identity header.</span>
+                </div>
+                <div class="field">
+                  <div class="label-row">
+                    <label for="trunk">Trunk</label>
+                    <button type="button" class="help" data-tip="SIP dial-string prefix applied before each destination number." aria-label="More information about the trunk">?</button>
+                  </div>
+                  <input id="trunk" class="mono" readonly>
+                </div>
+              </div>
+
+              <div class="grid two">
+                <div class="field">
+                  <div class="label-row">
+                    <label for="pilotHeader">Pilot Header</label>
+                    <button type="button" class="help" data-tip="P-Preferred-Identity header sent to the trunk. Airtel has none. TATA uses the production 67519000 header." aria-label="More information about the pilot header">?</button>
+                  </div>
+                  <input id="pilotHeader" class="mono" readonly placeholder="None for Airtel">
+                  <span class="hint">Airtel: omitted. TATA: <code>&lt;sip:67519000@10.0.78.9&gt;</code>.</span>
+                </div>
+                <div class="field">
+                  <div class="label-row">
+                    <label for="customer">Customer Context Name <span class="req">*</span></label>
+                    <button type="button" class="help" data-tip="Short lowercase customer tag. It becomes inb<name> and <name>roundrobin-dial." aria-label="More information about the customer context name">?</button>
+                  </div>
+                  <input id="customer" name="customer" class="mono" value="nivashanprop" spellcheck="false" autocomplete="off" maxlength="31" placeholder="nivashanprop">
+                  <span class="hint">Contexts: <code>inb&lt;name&gt;</code> and <code>&lt;name&gt;roundrobin-dial</code>.</span>
+                </div>
+              </div>
+
+              <div class="grid two">
+                <div class="field">
+                  <div class="label-row">
+                    <label for="did">DID / Virtual Number <span class="req">*</span></label>
+                    <button type="button" class="help" data-tip="The 8-digit DID that arrives in ${pseudodid}. It is also the bare caller ID used by Round Robin." aria-label="More information about the DID">?</button>
+                  </div>
+                  <input id="did" name="did" class="mono" value="45549493" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="14" placeholder="45549493">
+                  <span class="hint">Usually the 8 digits after +9180.</span>
+                </div>
+                <div class="field">
+                  <div class="label-row">
+                    <label for="displayNumber">Display CallerID <span class="optional">optional</span></label>
+                    <button type="button" class="help" data-tip="Optional caller ID for Contacts and Groups. Round Robin always uses the bare DID, as required by the production templates." aria-label="More information about the display caller ID">?</button>
+                  </div>
+                  <input id="displayNumber" name="displayNumber" class="mono" value="+918045549493" inputmode="tel" autocomplete="off" spellcheck="false" placeholder="+9180...">
+                  <span class="hint">Leave blank to present the DID. Round Robin always presents the bare DID.</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="label-row">
+                  <label for="welcomeAudio">Welcome Audio File <span class="optional">Contacts / Groups / Play tone</span></label>
+                  <button type="button" class="help" data-tip="Optional sound file inside /var/lib/asterisk/sounds/en/ without the extension. Played before contacts or groups, and by the Play tone action." aria-label="More information about the welcome audio">?</button>
+                </div>
+                <input id="welcomeAudio" name="welcomeAudio" class="mono" value="nivashanpropwelcome" spellcheck="false" autocomplete="off" placeholder="e.g., nivashanpropwelcome">
+                <span class="hint">Leave blank to skip <code>Playback()</code>.</span>
+              </div>
+            </section>
+
+            <!-- 02 ------------------------------------------------------------ -->
+            <section class="card card-amber">
+              <div class="card-head">
+                <span class="step">02</span>
+                <div>
+                  <h3>Call handling</h3>
+                  <p>Set the call-connect window and choose what happens when the call is answered.</p>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="label-row">
+                  <span class="field-label" id="connectTimeLabel">Call Connect Time <span class="req">*</span></span>
+                  <button type="button" class="help" data-tip="Choose 24/7 for round-the-clock routing, or Specific Time to restrict forwarding with GotoIfTime." aria-label="More information about Call Connect Time">?</button>
+                </div>
+                <div class="radio-cards two" role="radiogroup" aria-labelledby="connectTimeLabel">
+                  <label class="radio-card is-selected">
+                    <input type="radio" name="connectTime" value="always" checked>
+                    <span class="radio-body"><strong>24/7</strong><span>Route calls at any time.</span></span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="connectTime" value="specific">
+                    <span class="radio-body"><strong>Specific Time</strong><span>Use days and a daily time window.</span></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="subcard" id="timeFields" hidden>
+                <h4>Specific Time window</h4>
+                <p>Select working days, then set the start and end of the daily call-connect window.</p>
+
+                <div class="field">
+                  <div class="label-row">
+                    <span class="field-label" id="daysLabel">Call connect days <span class="req">*</span></span>
+                    <button type="button" class="help" data-tip="Days when calls should be forwarded. Days become an Asterisk GotoIfTime day spec." aria-label="More information about call connect days">?</button>
+                  </div>
+                  <div class="day-pills" id="dayPills" role="group" aria-labelledby="daysLabel"></div>
+                </div>
+
+                <div class="time-grid">
+                  <div class="field">
+                    <div class="label-row">
+                      <span class="field-label">Call connect from <span class="req">*</span></span>
+                      <button type="button" class="help" data-tip="Start of the daily window when calls should be forwarded." aria-label="More information about the start time">?</button>
+                    </div>
+                    <div class="time-controls">
+                      <select id="fromHour" aria-label="Call connect from hour"></select>
+                      <span class="separator">:</span>
+                      <select id="fromMinute" aria-label="Call connect from minute"></select>
+                      <select id="fromMeridiem" aria-label="Call connect from AM or PM"><option>AM</option><option>PM</option></select>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <div class="label-row">
+                      <span class="field-label">Call connect to <span class="req">*</span></span>
+                      <button type="button" class="help" data-tip="End of the daily window. Calls outside this window follow the off-hours path." aria-label="More information about the end time">?</button>
+                    </div>
+                    <div class="time-controls">
+                      <select id="toHour" aria-label="Call connect to hour"></select>
+                      <span class="separator">:</span>
+                      <select id="toMinute" aria-label="Call connect to minute"></select>
+                      <select id="toMeridiem" aria-label="Call connect to AM or PM"><option>AM</option><option>PM</option></select>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <div class="label-row">
+                    <label for="offHoursAudio">Off-hours fallback audio</label>
+                    <button type="button" class="help" data-tip="Optional prompt played outside the selected days and hours. Leave blank to hang up without a message." aria-label="More information about off-hours audio">?</button>
+                  </div>
+                  <input id="offHoursAudio" name="offHoursAudio" class="mono" value="" spellcheck="false" autocomplete="off" placeholder="e.g., afterhours_msg">
+                  <span class="hint">Optional. Leave blank to hang up outside the selected window.</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="label-row">
+                  <span class="field-label" id="actionLabel">Direct Action <span class="req">*</span></span>
+                  <button type="button" class="help" data-tip="Play tone plays the optional welcome audio first, then hangs up if no agents are listed or continues to the selected Forward To mode. Connect call forwards immediately using the selected Forward To mode." aria-label="More information about Direct Action">?</button>
+                </div>
+                <div class="radio-cards two" role="radiogroup" aria-labelledby="actionLabel">
+                  <label class="radio-card is-selected">
+                    <input type="radio" name="directAction" value="connect" checked>
+                    <span class="radio-body"><strong>Connect call</strong><span>Forward the call to agents.</span></span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="directAction" value="tone">
+                    <span class="radio-body"><strong>Play tone</strong><span>Play audio first, then optionally forward.</span></span>
+                  </label>
+                </div>
+                <span class="hint" id="playToneHint" hidden>With Play tone, Section 03 stays enabled. Leave agents empty to play and hang up, or add agents to continue to Contacts, Groups or Round Robin after the audio.</span>
+              </div>
+            </section>
+
+            <!-- 03 ------------------------------------------------------------ -->
+            <section class="card card-green" id="forwardCard">
+              <div class="card-head">
+                <span class="step">03</span>
+                <div>
+                  <h3>Forwarding</h3>
+                  <p>Choose how agents are dialled and add the mobile numbers for this routing rule. This section stays available with Play tone so audio can be followed by routing.</p>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="label-row">
+                  <span class="field-label" id="forwardLabel">Forward To <span class="req">*</span></span>
+                  <button type="button" class="help" data-tip="Contacts dials agents sequentially. Groups rings everyone through DIALGROUP. Round Robin / Sticky Queue adds the production queue, sticky lookup and IVR flow." aria-label="More information about Forward To">?</button>
+                </div>
+                <div class="radio-cards three" role="radiogroup" aria-labelledby="forwardLabel">
+                  <label class="radio-card is-selected">
+                    <input type="radio" name="forwardTo" value="contacts" checked>
+                    <span class="radio-body"><strong>Contacts</strong><span>One agent after another.</span></span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="forwardTo" value="groups">
+                    <span class="radio-body"><strong>Groups</strong><span>Ring all agents together.</span></span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="forwardTo" value="roundrobin">
+                    <span class="radio-body"><strong>Round Robin / Sticky Queue</strong><span>rrmemory queue with ODBC sticky and optional IVR.</span></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="field" id="groupNameField" hidden>
+                <div class="label-row">
+                  <label for="groupName">Group Name <span class="req">*</span></label>
+                  <button type="button" class="help" data-tip="Name of the DIALGROUP used to ring every agent number simultaneously." aria-label="More information about the Group Name">?</button>
+                </div>
+                <input id="groupName" name="groupName" class="mono" value="nivashanproppgrp" spellcheck="false" autocomplete="off" maxlength="48">
+                <span class="hint">Used in <code>DIALGROUP(group,add)</code> and the final <code>Dial()</code>.</span>
+              </div>
+
+              <div id="agentHome">
+                <div class="agent-block" id="agentBlock">
+                  <div class="field">
+                    <div class="field-head">
+                      <div class="label-row">
+                        <span class="field-label">Agent mobile numbers <span class="req" id="agentsRequired">*</span></span>
+                        <button type="button" class="help" data-tip="The physical mobiles where the call should ring. Every number is normalised to 0 + 10 digits. With Play tone this is optional: leave it empty to play the audio and hang up." aria-label="More information about agent numbers">?</button>
+                      </div>
+                      <div class="agent-tools">
+                        <button type="button" class="btn ghost small" id="addAgentBtn">+ Add agent number</button>
+                        <button type="button" class="btn ghost small" id="bulkToggle" aria-expanded="false" aria-controls="bulkPanel">Paste Bulk Numbers</button>
+                      </div>
+                    </div>
+                    <div class="agent-list" id="agentList"></div>
+                    <span class="hint">Every outbound number is normalised to <code>0&lt;10-digit&gt;</code> (11 digits).</span>
+                  </div>
+
+                  <div class="bulk-panel" id="bulkPanel" hidden>
+                    <div class="label-row">
+                      <label for="bulkText">Paste bulk numbers</label>
+                      <button type="button" class="help" data-tip="Paste a comma- or newline-separated list of mobile numbers. Spaces, +91 and leading zeros are stripped and duplicates removed." aria-label="More information about pasting bulk numbers">?</button>
+                      <span class="inline-hint">comma / newline separated</span>
+                    </div>
+                    <textarea id="bulkText" class="mono" rows="4" spellcheck="false" autocomplete="off" placeholder="8904033940, 9611054404&#10;+91 98660 33416&#10;09880410121"></textarea>
+                    <div class="bulk-actions">
+                      <button type="button" class="btn primary small" id="bulkAddBtn">Add numbers to list</button>
+                      <span class="hint" id="bulkNote">Spaces, +91 and leading zeros are stripped automatically.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rr-panel" id="rrPanel" hidden>
+                <div class="rr-head">
+                  <div>
+                    <span class="section-kicker">Round Robin / Sticky Queue</span>
+                    <h4>Queue, sticky and IVR configuration</h4>
+                    <p>The queue is <code id="rrQueuePreview">nivashanproproundrobin</code>. Members are added with 11-digit <code>Local/0&lt;10-digit&gt;@&hellip;-dial/n</code> channels.</p>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <div class="label-row">
+                    <label for="stickyMode">Sticky Mode <span class="req">*</span></label>
+                    <button type="button" class="help" data-tip="Pure round robin goes straight to Queue(). Sticky modes check the last agent through the production ODBC functions before falling back to the queue." aria-label="More information about Sticky Mode">?</button>
+                  </div>
+                  <select id="stickyMode" name="stickyMode">
+                    <option value="none">No Sticky (Pure Round Robin)</option>
+                    <option value="outbound">Outbound Sticky (ODBC_TDUCESTICKYAPILASTCALL)</option>
+                    <option value="inbound">Inbound Sticky (ODBC_INBARERA)</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <div class="label-row">
+                    <label for="rrAudioMode">IVR &amp; Audio Mode <span class="req">*</span></label>
+                    <button type="button" class="help" data-tip="No audio goes straight to the queue. Welcome plays one prompt. IVR reads one DTMF digit and routes each option to the queue or a direct number." aria-label="More information about IVR and Audio Mode">?</button>
+                  </div>
+                  <select id="rrAudioMode" name="rrAudioMode">
+                    <option value="none">No Audio / Direct Queue</option>
+                    <option value="welcome">Welcome Audio Only (Playback)</option>
+                    <option value="ivr">With IVR Menu (Read DTMF + Options)</option>
+                  </select>
+                </div>
+
+                <div class="field" id="rrAudioField" hidden>
+                  <div class="label-row">
+                    <label for="rrAudio">Welcome / IVR Audio Filename <span class="optional">optional</span></label>
+                    <button type="button" class="help" data-tip="Optional sound file inside /var/lib/asterisk/sounds/en/ without the extension. Welcome mode uses Playback(); IVR mode uses Read(). Leave blank to skip the prompt entirely." aria-label="More information about the IVR audio filename">?</button>
+                  </div>
+                  <input id="rrAudio" name="rrAudio" class="mono" value="nivashanpropwelcome" spellcheck="false" autocomplete="off" placeholder="nivashanpropwelcome">
+                  <span class="hint" id="rrAudioHelp">Leave blank to skip <code>Playback()</code> / <code>Read()</code> with no validation error.</span>
+                </div>
+
+                <div class="ivr-panel" id="ivrPanel" hidden>
+                  <div class="ivr-head">
+                    <div>
+                      <div class="label-row">
+                        <h4>IVR DTMF Options <span class="req" id="ivrRequired">*</span></h4>
+                        <button type="button" class="help" data-tip="Each row reads one DTMF digit from the caller and either sends the call to the round-robin queue or direct-dials one 10-digit mobile number. Digits 1 to 5 are supported." aria-label="More information about IVR DTMF options">?</button>
+                      </div>
+                      <p>Each row reads one digit and either routes to the round-robin queue or direct-dials one 10-digit mobile number.</p>
+                    </div>
+                    <button type="button" class="btn small ghost" id="addIvrOption">+ Add option</button>
+                  </div>
+                  <div class="ivr-options" id="ivrOptions"></div>
+                </div>
+
+                <div class="field">
+                  <div class="label-row">
+                    <label for="queueTimeout">Queue Timeout (Seconds) <span class="req">*</span></label>
+                    <button type="button" class="help" data-tip="Total maximum seconds a caller waits in the Round Robin queue across all agents before the call ends, e.g. 90s allows 3 agents &times; 30s each." aria-label="More information about Queue Timeout">?</button>
+                  </div>
+                  <input id="queueTimeout" name="queueTimeout" class="mono" type="number" min="5" max="600" step="1" value="90">
+                  <span class="hint">Used by <code>Queue()</code>. <code>queues.conf</code> keeps <code>timeout = 30</code>.</span>
+                </div>
+
+                <div class="rr-agent-slot" id="rrAgentSlot"></div>
+              </div>
+            </section>
+
+            <!-- 04 ------------------------------------------------------------ -->
+            <section class="card card-teal" id="ringCard">
+              <div class="card-head">
+                <span class="step">04</span>
+                <div>
+                  <h3>Ring time</h3>
+                  <p>Control how long Asterisk waits before moving on or ending the call.</p>
+                </div>
+              </div>
+              <div class="field">
+                <div class="label-row">
+                  <label for="ringTime">Ring Time (Seconds)</label>
+                  <button type="button" class="help" data-tip="Seconds to ring an agent for Contacts and Groups. Round Robin uses the queue timeout instead." aria-label="More information about Ring Time">?</button>
+                </div>
+                <input id="ringTime" name="ringTime" class="mono" type="number" min="1" max="300" step="1" value="30">
+                <span class="hint">Contacts and Groups only. Round Robin uses the queue timeout above.</span>
+              </div>
+            </section>
+
+            <div class="form-actions">
+              <span class="hint" id="validationHint">The output updates as you type.</span>
+              <button type="submit" class="btn primary large" id="generateBtn">Generate Dialplan</button>
+            </div>
+          </form>
+
+          <aside class="preview-col">
+            <section class="card summary-card">
+              <div class="card-head compact">
+                <div>
+                  <span class="section-kicker">Live preview</span>
+                  <h3>Configuration summary</h3>
+                </div>
+                <span class="status-badge" id="summaryStatus">Draft</span>
+              </div>
+              <dl class="summary-list">
+                <div><dt>Customer</dt><dd id="sumCustomer">&mdash;</dd></div>
+                <div><dt>Context</dt><dd><code id="sumContext">inb&hellip;</code></dd></div>
+                <div><dt>DID</dt><dd id="sumDid">&mdash;</dd></div>
+                <div><dt>Trunk</dt><dd id="sumTrunk">Bangalore Airtel</dd></div>
+                <div><dt>Forwarding</dt><dd id="sumForward">Contacts</dd></div>
+                <div><dt>Agents</dt><dd id="sumAgents">0</dd></div>
+              </dl>
+              <div class="summary-detail" id="sumDetail"></div>
+            </section>
+
+            <section class="note-card">
+              <h4>Before you deploy</h4>
+              <ol class="checklist-list">
+                <li>Insert the <code>[from-trunk]</code> lines under the existing DID checks and jumps.</li>
+                <li>Add both generated contexts to <code>extensions.conf</code>.</li>
+                <li>Add the queue block to <code>queues.conf</code> (no static members).</li>
+                <li>Run the CLI commands to reload and attach every agent.</li>
+                <li>Upload any audio files to <code>/var/lib/asterisk/sounds/en</code>.</li>
+              </ol>
+            </section>
+
+            <section class="note-card rules-card">
+              <h4>Production connection rules</h4>
+              <ul>
+                <li>Caller ID and the TATA header are emitted before every sticky/IVR <code>GotoIf</code>.</li>
+                <li>Inbound sticky uses <code>ODBC_INBARERA</code>; outbound sticky uses <code>ODBC_TDUCESTICKYAPILASTCALL</code>.</li>
+                <li>Every agent, IVR and sticky dial is 11 digits: <code>0&lt;10-digit&gt;</code>.</li>
+                <li>Sticky matches use a 30 second ring; unmatched calls fall back to the queue.</li>
+              </ul>
+            </section>
+          </aside>
+        </div>
+
+        <section class="output-section" id="outputSection" aria-live="polite">
+          <div class="output-head">
+            <div>
+              <span class="eyebrow">Live output</span>
+              <h2 id="outputTitle">Generated configuration</h2>
+              <p id="outputMeta">Fill in the form to build the Asterisk blocks.</p>
+            </div>
+            <div class="output-actions">
+              <span class="status-badge" id="statusBadge">Ready</span>
+              <button type="button" class="btn primary" id="downloadAll" disabled>Download All (.txt)</button>
+            </div>
+          </div>
+
+          <div id="errorBanner" class="alert" role="alert" hidden>
+            <strong id="errorTitle">Fix the following before generating</strong>
+            <ul id="errorList"></ul>
+          </div>
+
+          <div id="warningBanner" class="alert warn" role="status" hidden>
+            <strong>Check before deploying</strong>
+            <ul id="warningList"></ul>
+          </div>
+
+          <div class="output-empty" id="outputEmpty">
+            <strong>No configuration generated yet</strong>
+            <p>Fill in the customer, DID and agent numbers. The copy-ready blocks appear here automatically.</p>
+          </div>
+
+          <div class="output-grid" id="outputBlocks"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- MODULE 2: ASTERISK CLI & CDR COMMAND GENERATOR -->
+    <div id="panel-asterisk" class="module-panel">
+      <main class="shell">
+
+        <section class="page-head">
+          <div>
+            <span class="eyebrow">CLI &amp; CDR toolkit &middot; no server required</span>
+            <h2>Asterisk Cmds</h2>
+            <p>
+              Generate ready-to-run Asterisk CLI and CDR lookup commands from the customer
+              name, agent number and IVR press label. Everything updates live and runs offline.
+            </p>
+          </div>
+          <div class="head-actions">
+            <button type="button" class="btn primary" id="astSyncBtn">Sync from Dialplan tab</button>
+          </div>
+        </section>
+
+        <div class="layout">
+          <div class="form-col" id="astForm">
+            <section class="card card-teal">
+              <div class="card-head">
+                <span class="step">CLI</span>
+                <div>
+                  <h3>Target customer &amp; agent</h3>
+                  <p>The command set is derived automatically from these three values.</p>
+                </div>
+              </div>
+
+              <div class="grid three">
+                <div class="field">
+                  <div class="label-row">
+                    <label for="astCustomer">Customer Name <span class="req">*</span></label>
+                  </div>
+                  <input id="astCustomer" class="mono" type="text" value="browmasters" placeholder="e.g. browmasters" spellcheck="false" autocomplete="off" maxlength="48">
+                  <span class="hint">Normalised to lowercase letters and numbers.</span>
+                </div>
+
+                <div class="field">
+                  <div class="label-row">
+                    <label for="astAgent">Agent Number (10/11 digits)</label>
+                  </div>
+                  <input id="astAgent" class="mono" type="text" value="08655722033" placeholder="e.g. 08655722033" inputmode="tel" spellcheck="false" autocomplete="off" maxlength="24">
+                  <span class="hint">Spaces are stripped when building commands.</span>
+                </div>
+
+                <div class="field">
+                  <div class="label-row">
+                    <label for="astPress">IVR Press Label</label>
+                  </div>
+                  <input id="astPress" class="mono" type="text" value="press2" placeholder="e.g. press2" spellcheck="false" autocomplete="off" maxlength="32">
+                  <span class="hint">Suffix after the customer name, e.g. <code>press1</code>.</span>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <span class="hint" id="astHint">Commands update as you type.</span>
+                <button type="button" class="btn ghost small" id="astResetBtn">Reset defaults</button>
+              </div>
+            </section>
+          </div>
+
+          <aside class="preview-col">
+            <section class="card summary-card ast-derived-card" id="astDerivedBanner">
+              <div class="card-head compact">
+                <div>
+                  <span class="section-kicker">Live preview</span>
+                  <h3>Auto-derived names</h3>
+                </div>
+                <span class="status-badge good">Live</span>
+              </div>
+              <dl class="summary-list">
+                <div><dt>Inbound Context</dt><dd><code id="lblInbound">inbbrowmasters</code></dd></div>
+                <div><dt>Queue Name</dt><dd><code id="lblQueue">browmastersroundrobin</code></dd></div>
+                <div><dt>Dial Context</dt><dd><code id="lblDialCtx">browmastersroundrobin-dial</code></dd></div>
+                <div><dt>Press Label</dt><dd><code id="lblPressLabel">browmasterspress2</code></dd></div>
+              </dl>
+            </section>
+
+            <section class="note-card">
+              <h4>Using these commands</h4>
+              <ul>
+                <li>Reload first, then verify the inbound context before touching the queue.</li>
+                <li>Queue add/remove are dynamic: they survive a reload but not a restart.</li>
+                <li>CDR lookup reads <code>Master.csv</code> and returns the last 15 matches.</li>
+                <li>Use <strong>Sync from Dialplan tab</strong> to reuse the customer and first agent from Module 1.</li>
+              </ul>
+            </section>
+          </aside>
+        </div>
+
+        <section class="output-section ast-output-section" id="astOutputSection" aria-live="polite">
+          <div class="output-head">
+            <div>
+              <span class="eyebrow">Live commands</span>
+              <h2 id="astOutputTitle">CLI &amp; CDR command cards</h2>
+              <p id="astOutputMeta">9 ready-to-copy commands generated from the inputs above.</p>
+            </div>
+            <div class="output-actions">
+              <span class="status-badge good" id="astCmdCount">9 commands</span>
+            </div>
+          </div>
+          <div class="output-grid" id="astCmdList"></div>
+        </section>
+      </main>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <span>Asterisk Dialplan Generator &middot; pure HTML / CSS / JavaScript</span>
+  <span>Runs offline from <code>file://</code> and GitHub Pages</span>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------------------------------------------------------------------- */
+/* index1.html: module switching + Asterisk CLI / CDR command generator.   */
+/* Global function names match the original inline module for compatibility. */
+/* ---------------------------------------------------------------------- */
+(function (global) {
+  'use strict';
+
+  var AST_DEFAULTS = { customer: 'browmasters', agent: '08655722033', press: 'press2' };
+  var astToastTimer = null;
+
+  function byId(id) { return document.getElementById(id); }
+  function setText(id, value) {
+    var node = byId(id);
+    if (node) node.textContent = value;
+  }
+  function tag(value, fallback) {
+    var text = String(value == null ? '' : value).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return text || fallback;
+  }
+  function agentNumber(value, fallback) {
+    var text = String(value == null ? '' : value).replace(/\s+/g, '');
+    return text || fallback;
+  }
+  function pad2(value) { return (value < 10 ? '0' : '') + value; }
+
+  function astToast(message, isError) {
+    var toast = byId('toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.toggle('error', !!isError);
+    toast.classList.add('show');
+    global.clearTimeout(astToastTimer);
+    astToastTimer = global.setTimeout(function () { toast.classList.remove('show'); }, 2600);
+  }
+
+  /* -------------------------------------------------------------- tabs */
+
+  global.switchAppModule = function switchAppModule(moduleName) {
+    var panels = document.querySelectorAll('.module-panel');
+    var buttons = document.querySelectorAll('.module-nav-btn');
+    var i;
+
+    for (i = 0; i < panels.length; i += 1) {
+      panels[i].classList.toggle('active', panels[i].id === 'panel-' + moduleName);
+    }
+    for (i = 0; i < buttons.length; i += 1) {
+      var active = buttons[i].id === 'nav-' + moduleName;
+      buttons[i].classList.toggle('active', active);
+      if (active) buttons[i].setAttribute('aria-current', 'page');
+      else buttons[i].removeAttribute('aria-current');
+    }
+
+    if (moduleName === 'asterisk') global.generateAsteriskCmds();
+    global.scrollTo(0, 0);
+  };
+
+  /* ---------------------------------------------------------- clipboard */
+
+  function legacyCopy(text) {
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', 'readonly');
+    area.style.position = 'fixed';
+    area.style.top = '-1000px';
+    area.style.left = '-1000px';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+
+    var ok = false;
+    try {
+      area.select();
+      area.setSelectionRange(0, area.value.length);
+      ok = document.execCommand('copy');
+    } catch (error) {
+      ok = false;
+    }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  global.copyAstCmd = function copyAstCmd(idx, btn) {
+    var pre = byId('ast-cmd-' + idx);
+    if (!pre || !btn) return;
+    var text = pre.textContent;
+
+    function finish(ok) {
+      if (!ok) {
+        astToast('Copy failed. Select the command text manually.', true);
+        return;
+      }
+      var label = btn.getAttribute('data-label') || btn.textContent;
+      btn.setAttribute('data-label', label);
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      global.setTimeout(function () {
+        btn.textContent = label;
+        btn.classList.remove('copied');
+      }, 1400);
+      astToast('Command ' + (idx + 1) + ' copied to clipboard.');
+    }
+
+    if (global.navigator && global.navigator.clipboard && global.navigator.clipboard.writeText) {
+      global.navigator.clipboard.writeText(text).then(
+        function () { finish(true); },
+        function () { finish(legacyCopy(text)); }
+      );
+    } else {
+      finish(legacyCopy(text));
+    }
+  };
+
+  /* ------------------------------------------------------------ rendering */
+
+  function cardNode(className, text) {
+    var node = document.createElement(className === 'code-card' ? 'article' : 'div');
+    node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function renderCommandCards(commands) {
+    var list = byId('astCmdList');
+    if (!list) return;
+    while (list.firstChild) list.removeChild(list.firstChild);
+
+    commands.forEach(function (item, idx) {
+      var card = cardNode('code-card');
+
+      var head = cardNode('code-card-head');
+      var title = cardNode('code-card-title');
+      var step = cardNode('code-step', pad2(idx + 1));
+
+      var text = cardNode('div');
+      var heading = document.createElement('h3');
+      heading.textContent = item.title;
+      var description = document.createElement('p');
+      description.textContent = item.desc;
+      text.appendChild(heading);
+      text.appendChild(description);
+      text.appendChild(cardNode('code-file', item.file));
+
+      var copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'btn light small copy-btn';
+      copy.textContent = 'Copy';
+      copy.setAttribute('aria-label', 'Copy command ' + (idx + 1));
+      copy.addEventListener('click', function () { global.copyAstCmd(idx, copy); });
+
+      title.appendChild(step);
+      title.appendChild(text);
+      head.appendChild(title);
+      head.appendChild(copy);
+
+      var pre = document.createElement('pre');
+      pre.id = 'ast-cmd-' + idx;
+      pre.textContent = item.cmd;
+
+      card.appendChild(head);
+      card.appendChild(pre);
+      list.appendChild(card);
+    });
+  }
+
+  global.generateAsteriskCmds = function generateAsteriskCmds() {
+    var customerInput = byId('astCustomer');
+    var agentInput = byId('astAgent');
+    var pressInput = byId('astPress');
+    if (!customerInput || !agentInput || !pressInput) return;
+
+    var customer = tag(customerInput.value, AST_DEFAULTS.customer);
+    var agent = agentNumber(agentInput.value, AST_DEFAULTS.agent);
+    var pressSuffix = tag(pressInput.value, AST_DEFAULTS.press);
+
+    var inboundCtx = 'inb' + customer;
+    var queue = customer + 'roundrobin';
+    var dialCtx = queue + '-dial';
+    var pressLabel = customer + pressSuffix;
+
+    setText('lblInbound', inboundCtx);
+    setText('lblQueue', queue);
+    setText('lblDialCtx', dialCtx);
+    setText('lblPressLabel', pressLabel);
+    setText('astOutputMeta', '9 commands · ' + agent + ' · ' + queue);
+    setText('astCmdCount', '9 commands · live');
+
+    var commands = [
+      {
+        title: 'Reload Dialplan',
+        desc: 'Loads edited extensions.conf contexts into active Asterisk memory without dropping live calls.',
+        file: 'CLI',
+        cmd: 'asterisk -rx "dialplan reload"'
+      },
+      {
+        title: 'Inspect Inbound Context & Press Label',
+        desc: 'Verifies the loaded inbound context and the IVR press label with 12 lines of context.',
+        file: 'CLI',
+        cmd: 'asterisk -rx "dialplan show ' + inboundCtx + '" | grep -A 12 "' + pressLabel + '"'
+      },
+      {
+        title: 'Search Agent / Customer in extensions.conf',
+        desc: 'Finds the agent line number with two lines of surrounding context before editing the file.',
+        file: 'extensions.conf',
+        cmd: 'grep -n -C 2 "' + agent + '" /etc/asterisk/extensions.conf'
+      },
+      {
+        title: 'Check Live Queue Members',
+        desc: 'Shows logged-in agents, their status and call counters for the round robin queue.',
+        file: 'CLI',
+        cmd: 'asterisk -rx "queue show ' + queue + '"'
+      },
+      {
+        title: 'Add Agent to Round Robin Queue',
+        desc: 'Dynamically attaches the agent to the queue through the queue-member dial context.',
+        file: 'CLI',
+        cmd: 'asterisk -rx "queue add member Local/' + agent + '@' + dialCtx + '/n to ' + queue + '"'
+      },
+      {
+        title: 'Remove Agent from Round Robin Queue',
+        desc: 'Removes the agent so it stops receiving calls from the round robin queue.',
+        file: 'CLI',
+        cmd: 'asterisk -rx "queue remove member Local/' + agent + '@' + dialCtx + '/n from ' + queue + '"'
+      },
+      {
+        title: 'Check Active Live Calls',
+        desc: 'Checks whether the agent is ringing or talking on a live channel right now.',
+        file: 'CLI',
+        cmd: 'asterisk -rx "core show channels concise" | grep "' + agent + '"'
+      },
+      {
+        title: 'Place Test Call to Agent',
+        desc: 'Originates a test call through the dial context to verify routing and prompt playback.',
+        file: 'CLI',
+        cmd: 'asterisk -rx "channel originate Local/' + agent + '@' + dialCtx + '/n application Playback demo-congrats"'
+      },
+      {
+        title: 'Check Past Call History (CDR Master.csv)',
+        desc: 'Reads the last 15 CDR rows for the agent with timestamps, duration and disposition.',
+        file: 'Master.csv',
+        cmd: 'grep -a "' + agent + '" /var/log/asterisk/cdr-csv/Master.csv | tail -n 15'
+      }
+    ];
+
+    renderCommandCards(commands);
+  };
+
+  global.syncFromDialplanTab = function syncFromDialplanTab() {
+    var dpCustomer = byId('customer');
+    var agentInputs = document.querySelectorAll('#ruleForm .agent-input');
+    var customer = dpCustomer ? dpCustomer.value.trim() : '';
+    var agent = '';
+    var i;
+
+    for (i = 0; i < agentInputs.length; i += 1) {
+      if (agentInputs[i].value && agentInputs[i].value.trim()) {
+        agent = agentInputs[i].value.trim();
+        break;
+      }
+    }
+
+    var changed = false;
+    if (customer) {
+      var astCustomer = byId('astCustomer');
+      if (astCustomer) { astCustomer.value = customer; changed = true; }
+    }
+    if (agent) {
+      var astAgent = byId('astAgent');
+      if (astAgent) { astAgent.value = agent; changed = true; }
+    }
+
+    global.generateAsteriskCmds();
+    astToast(
+      changed ? 'Synced customer and agent from the Dialplan Generator tab.' : 'No Dialplan Generator values to sync yet.',
+      !changed
+    );
+  };
+
+  /* --------------------------------------------------------------- events */
+
+  function bind() {
+    ['astCustomer', 'astAgent', 'astPress'].forEach(function (id) {
+      var node = byId(id);
+      if (node) node.addEventListener('input', global.generateAsteriskCmds);
+    });
+
+    var syncBtn = byId('astSyncBtn');
+    if (syncBtn) syncBtn.addEventListener('click', global.syncFromDialplanTab);
+
+    var resetBtn = byId('astResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        byId('astCustomer').value = AST_DEFAULTS.customer;
+        byId('astAgent').value = AST_DEFAULTS.agent;
+        byId('astPress').value = AST_DEFAULTS.press;
+        global.generateAsteriskCmds();
+        astToast('Asterisk command defaults restored.');
+      });
+    }
+
+    var navs = document.querySelectorAll('.module-nav-btn');
+    navs.forEach(function (btn, index) {
+      btn.addEventListener('keydown', function (event) {
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        event.preventDefault();
+        var next = navs[(index + (event.key === 'ArrowRight' ? 1 : navs.length - 1)) % navs.length];
+        next.focus();
+        next.click();
+      });
+    });
+
+    global.generateAsteriskCmds();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+})(window);
+</script>
+
+<script src="dialplan.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
